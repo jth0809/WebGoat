@@ -24,4 +24,5 @@ phases:
         \"build_id\": env.CODEBUILD_BUILD_ID, \
         \"source_commitid\": env.CODEBUILD_RESOLVED_SOURCE_VERSION, \
         \"report\": . }" sonarqube_scanreport.json > payload.json
+      - cat payload.json
       - "curl -s -u $SONAR_QUBE_KEY: $SONAR_QUBE_URL/api/qualitygates/project_status?projectKey=$SONAR_QUBE_PROJECT> /tmp/result.json"
