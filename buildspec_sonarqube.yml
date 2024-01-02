@@ -1,5 +1,5 @@
 version: 0.2
- 
+
 phases:
   install:
     commands:
@@ -13,7 +13,7 @@ phases:
   build:
     commands:
       - echo Start code scan...
-      - ./../../../../../../../tmp/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner -Dsonar.projectKey=$SONAR_QUBE_PROJECT -Dsonar.sources=. -Dsonar.host.url=$SONAR_QUBE_URL -Dsonar.token=$SONAR_QUBE_KEY -Dsonar.java.binaries=target/classes > sonarqube_scanreport.json
+      - ./../../../../../../../tmp/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner -Dsonar.projectKey=$SONAR_QUBE_PROJECT -Dsonar.sources=. -Dsonar.host.url=$SONAR_QUBE_URL -Dsonar.token=$SONAR_QUBE_KEY -Dsonar.java.binaries="./" > sonarqube_scanreport.json
   post_build:
     commands:
       - SCAN_RESULT=$(curl -o sonarqube_scanreport.json -u $SONAR_QUBE_KEY $SONAR_QUBE_URL/api/issues/search?createdAfter=2020-10-21&component=$SONAR_QUBE_PROJECT&severities=CRITICAL,BLOCKER&languages=java&types=VULNERABILITY&onComponentOnly=true)
@@ -25,3 +25,16 @@ phases:
         \"source_commitid\": env.CODEBUILD_RESOLVED_SOURCE_VERSION, \
         \"report\": . }" sonarqube_scanreport.json > payload.json
       - "curl -s -u $SONAR_QUBE_KEY: $SONAR_QUBE_URL/api/qualitygates/project_status?projectKey=$SONAR_QUBE_PROJECT> /tmp/result.json"
+      - if [ $(jq -r '.projectStatus.status' /tmp/result.json) = ERROR ] ; then
+        CODEBUILD_BUILD_SUCCEEDING=0 ; fi
+      - |
+        if ["$CODEBUILD_BUILD_SUCCEEDING" -eq 0  ]; then
+          aws lambda invoke --function-name ImportVulToSecurityHub --payload file://payload.json sonarqube_scan_report.json && echo "LAMBDA_SUCCEDED" || echo "LAMBDA_FAILED";
+          echo "in quality_status ERROR or WARN condition"
+          exit 1;
+        elif [ $(jq -r '.projectStatus.status' /tmp/result.json) = OK ]; then
+          echo "in quality_status OK condition"
+        else
+          echo "in quality_status  unexpected condition"
+          exit 1;
+        fi
